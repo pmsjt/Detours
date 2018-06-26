@@ -16,6 +16,34 @@
 //////////////////////////////////////////////////////////////////////////////
 //
 
+#ifdef DETOURS_INTERNAL
+
+#define _CRT_STDIO_ARBITRARY_WIDE_SPECIFIERS 1
+#define _ARM_WINAPI_PARTITION_DESKTOP_SDK_AVAILABLE 1
+
+#pragma warning(disable:4068) // unknown pragma (suppress)
+
+#if _MSC_VER >= 1900
+#pragma warning(push)
+#pragma warning(disable:4091) // empty typedef
+#endif
+
+#include <windows.h>
+#if (_MSC_VER < 1310)
+#else
+#pragma warning(push)
+#if _MSC_VER > 1400
+#pragma warning(disable:6102 6103) // /analyze warnings
+#endif
+#include <strsafe.h>
+#pragma warning(pop)
+#endif
+
+#endif // DETOURS_INTERNAL
+
+//////////////////////////////////////////////////////////////////////////////
+//
+
 #undef DETOURS_X64
 #undef DETOURS_X86
 #undef DETOURS_IA64
@@ -377,15 +405,31 @@ typedef struct _DETOUR_EXE_RESTORE
 
     IMAGE_DOS_HEADER    idh;
     union {
-        IMAGE_NT_HEADERS    inh;
+        IMAGE_NT_HEADERS    inh;        // all environments have this
+#ifdef IMAGE_NT_OPTIONAL_HDR32_MAGIC    // some environments do not have this
         IMAGE_NT_HEADERS32  inh32;
+#endif
+#ifdef IMAGE_NT_OPTIONAL_HDR64_MAGIC    // some environments do not have this
         IMAGE_NT_HEADERS64  inh64;
+#endif
+#ifdef IMAGE_NT_OPTIONAL_HDR64_MAGIC    // some environments do not have this
         BYTE                raw[sizeof(IMAGE_NT_HEADERS64) +
                                 sizeof(IMAGE_SECTION_HEADER) * 32];
+        C_ASSERT(sizeof(IMAGE_NT_HEADERS64) == 0x108);
+#else
+        BYTE                raw[0x108 + sizeof(IMAGE_SECTION_HEADER) * 32];
+#endif
     };
     DETOUR_CLR_HEADER   clr;
 
 } DETOUR_EXE_RESTORE, *PDETOUR_EXE_RESTORE;
+
+// The size can change, but assert for clarity due to the muddying #ifdefs.
+#ifdef _WIN64
+C_ASSERT(sizeof(DETOUR_EXE_RESTORE) == 0x688);
+#else
+C_ASSERT(sizeof(DETOUR_EXE_RESTORE) == 0x678);
+#endif
 
 typedef struct _DETOUR_EXE_HELPER
 {
